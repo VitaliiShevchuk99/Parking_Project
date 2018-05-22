@@ -22,21 +22,24 @@ namespace ProjectParking
     /// </summary>
     public partial class MainWindow : Window
     {
-        
+
         public MainWindow()
         {
             InitializeComponent();
-            
-
+            ArduinoFound();
         }
+        SerialPort currentPort= new SerialPort();
+        private delegate void updateDelegate(string txt);
 
         private void Button_add_Click(object sender, RoutedEventArgs e)
         {
+            
             Move(1);
         }
 
         private void Button_Grap_Click(object sender, RoutedEventArgs e)
         {
+            
             Move(2);
         }
 
@@ -46,7 +49,10 @@ namespace ProjectParking
 
         private void Move(int n)
         {
-            string Code_Card = " ";
+            if (!currentPort.IsOpen) {TextBlock1.Text = "ПНХ"; return; }
+            TextBlock1.Text = "OK";
+            currentPort.Write("0");
+            string Code_Card = currentPort.ReadLine();
             if (n == 1)
             {
                 for (int i = 1; i <= 24; i++)
@@ -55,6 +61,8 @@ namespace ProjectParking
                     {
                         dictionary.Add(Code_Card, i);
                         time.Add(Code_Card, DateTime.Now);
+                        if (!currentPort.IsOpen) return;
+                        currentPort.Write("1 "+ i);
                         break;
                     }
                 }
@@ -70,6 +78,8 @@ namespace ProjectParking
                     t = DateTime.Now - time[Code_Card];
                     time.Remove(Code_Card);
                     int m = 0;
+                    if (!currentPort.IsOpen) return;
+                    currentPort.Write("2 "+k);
                     m = t.Seconds + t.Minutes * 60 + t.Hours * 3600;
                     TextBlock1.Text = n + " " + k + " TIME " + m;
 
@@ -80,6 +90,70 @@ namespace ProjectParking
         }
 
 
-    }
+   
+       
+        
+        private bool ArduinoDetected()
+        {
+            try
+            {
+                currentPort.Open();
+                System.Threading.Thread.Sleep(500);
+                // небольшая пауза, ведь SerialPort не терпит суеты 
 
+                string returnMessage = currentPort.ReadLine();
+                currentPort.Close();
+                if (returnMessage == null) { return false; }
+                // необходимо чтобы void loop() в скетче содержал код Serial.println("Info from Arduino"); 
+                if (returnMessage.Contains("Info from Arduino"))
+                {
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            catch (Exception e)
+            {
+                return false;
+            }
+        }
+        private void ArduinoFound()
+        {
+            bool ArduinoPortFound = false;
+
+            try
+            {
+                string[] ports = SerialPort.GetPortNames();
+                foreach (string port in ports)
+                {
+                    currentPort = new SerialPort(port, 9600 , Parity.None, 8, StopBits.One);
+                    if (ArduinoDetected())
+                    {
+                        ArduinoPortFound = true;
+                        break;
+                    }
+                    else
+                    {
+                        ArduinoPortFound = false;
+                    }
+                }
+            }
+            catch { }
+
+            if (ArduinoPortFound == false) return;
+
+            System.Threading.Thread.Sleep(1000); // wait a lot after closing
+
+            currentPort.BaudRate = 9600;
+            currentPort.DtrEnable = true;
+            currentPort.ReadTimeout = 1000;
+            try
+            {
+                currentPort.Open();
+            }
+            catch { }
+        }
+    }
 }
